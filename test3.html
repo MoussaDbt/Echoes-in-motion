@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>echoes in motion</title>
+<style>
+  body { margin:0; overflow:hidden; background:black; font-family:monospace; }
+  canvas { display:block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+
+
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, CX, CY, radius_;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W / 2;
+    CY = H / 2;
+    radius_ = Math.min(W, H) * 0.45;
+}
+
+resize();
+
+window.addEventListener('resize', () => { resize(); initGrid(); makeGrid(); initRain(); });
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// Random number generator
+function mulberry32(s) {
+  return function() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(Math.floor(Math.random() * 1e12));
+
+// Simplex noise
+const _perm = new Uint8Array(512);
+{
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  for (let i = 0; i < 512; i++) _perm[i] = p[i & 255];
+}
+const _G2 = (3 - Math.sqrt(3)) / 6;
+const _g2 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+
+function dot2(g, x, y) { return g[0]*x + g[1]*y; }
+
+function noise2(xin, yin) {
+  const F2 = 0.5*(Math.sqrt(3)-1), s=(xin+yin)*F2;
+  const i=Math.floor(xin+s), j=Math.floor(yin+s), t2=(i+j)*_G2;
+  const x0=xin-(i-t2), y0=yin-(j-t2);
+  const i1=x0>y0?1:0, j1=x0>y0?0:1;
+  const x1=x0-i1+_G2, y1=y0-j1+_G2, x2=x0-1+2*_G2, y2=y0-1+2*_G2;
+  const ii=i&255,jj=j&255;
+  const g0=_perm[ii+_perm[jj]]%8, g1=_perm[ii+i1+_perm[jj+j1]]%8, g2=_perm[ii+1+_perm[jj+1]]%8;
+  let t0=0.5-x0*x0-y0*y0,n0=t0<0?0:(t0*=t0,t0*t0*dot2(_g2[g0],x0,y0));
+  let t1=0.5-x1*x1-y1*y1,n1=t1<0?0:(t1*=t1,t1*t1*dot2(_g2[g1],x1,y1));
+  let t2b=0.5-x2*x2-y2*y2,n2=t2b<0?0:(t2b*=t2b,t2b*t2b*dot2(_g2[g2],x2,y2));
+  return 70*(n0+n1+n2);
+}
+
+function getFlowAngle(x, y) {
+    // Scale coordinates for smooth noise
+    const scale = 0.002; 
+    return noise2(x * scale, y * scale) * Math.PI * 2; // full angle 0..2π
+}
+
+
+
+// Grid
+const CELL_W=110, CELL_H=70;
+let COLS, ROWS, grid=[], gridTarget=[], gridAge=[];
+function initGrid(){ COLS=Math.ceil(W/CELL_W)+1; ROWS=Math.ceil(H/CELL_H)+1; }
+function makeGrid(){
+  grid=[]; gridTarget=[]; gridAge=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const v=(noise2(c*0.8,r*0.8)/70+1)/2;
+    grid.push(Math.max(0,Math.min(1,v)));
+    gridTarget.push(rng());
+    gridAge.push(Math.floor(rng()*400));
+  }
+}
+initGrid(); makeGrid();
+function updateGrid(){
+  for(let i=0;i<grid.length;i++){
+    gridAge[i]--;
+    if(gridAge[i]<=0){ gridTarget[i]=rng(); gridAge[i]=300+Math.floor(rng()*600);}
+    grid[i]+=(gridTarget[i]-grid[i])*0.0008;
+  }
+}
+function sampleGrid(sx,sy){
+  const col=Math.max(0,Math.min(W-1,sx))/CELL_W;
+  const row=Math.max(0,Math.min(H-1,sy))/CELL_H;
+  const c0=Math.max(0,Math.min(COLS-2,Math.floor(col)));
+  const r0=Math.max(0,Math.min(ROWS-2,Math.floor(row)));
+  const cf=col-c0, rf=row-r0;
+  const scf=cf*cf*(3-2*cf), srf=rf*rf*(3-2*rf);
+  return grid[r0*COLS+c0]*(1-scf)*(1-srf)
+       + grid[r0*COLS+c0+1]*scf*(1-srf)
+       + grid[(r0+1)*COLS+c0]*(1-scf)*srf
+       + grid[(r0+1)*COLS+c0+1]*scf*srf;
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// --- Code Rain ---
+const fullCode = `
+cconst canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, CX, CY, radius_;
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W / 2;
+    CY = H / 2;
+    radius_ = Math.min(W, H) * 0.45;
+}
+resize();
+window.addEventListener('resize', () => { resize(); initGrid(); makeGrid(); initRain(); });
+
+// Random number generator
+function mulberry32(s) {
+  return function() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(Math.floor(Math.random() * 1e12));
+
+// Simplex noise
+const _perm = new Uint8Array(512);
+{
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+  for (let i = 0; i < 512; i++) _perm[i] = p[i & 255];
+}
+const _G2 = (3 - Math.sqrt(3)) / 6;
+const _g2 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+function dot2(g, x, y) { return g[0]*x + g[1]*y; }
+function noise2(xin, yin) {
+  const F2 = 0.5*(Math.sqrt(3)-1), s=(xin+yin)*F2;
+  const i=Math.floor(xin+s), j=Math.floor(yin+s), t2=(i+j)*_G2;
+  const x0=xin-(i-t2), y0=yin-(j-t2);
+  const i1=x0>y0?1:0, j1=x0>y0?0:1;
+  const x1=x0-i1+_G2, y1=y0-j1+_G2, x2=x0-1+2*_G2, y2=y0-1+2*_G2;
+  const ii=i&255,jj=j&255;
+  const g0=_perm[ii+_perm[jj]]%8, g1=_perm[ii+i1+_perm[jj+j1]]%8, g2=_perm[ii+1+_perm[jj+1]]%8;
+  let t0=0.5-x0*x0-y0*y0,n0=t0<0?0:(t0*=t0,t0*t0*dot2(_g2[g0],x0,y0));
+  let t1=0.5-x1*x1-y1*y1,n1=t1<0?0:(t1*=t1,t1*t1*dot2(_g2[g1],x1,y1));
+  let t2b=0.5-x2*x2-y2*y2,n2=t2b<0?0:(t2b*=t2b,t2b*t2b*dot2(_g2[g2],x2,y2));
+  return 70*(n0+n1+n2);
+}
+
+// Grid
+const CELL_W=110, CELL_H=70;
+let COLS, ROWS, grid=[], gridTarget=[], gridAge=[];
+function initGrid(){ COLS=Math.ceil(W/CELL_W)+1; ROWS=Math.ceil(H/CELL_H)+1; }
+function makeGrid(){
+  grid=[]; gridTarget=[]; gridAge=[];
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const v=(noise2(c*0.8,r*0.8)/70+1)/2;
+    grid.push(Math.max(0,Math.min(1,v)));
+    gridTarget.push(rng());
+    gridAge.push(Math.floor(rng()*400));
+  }
+}
+initGrid(); makeGrid();
+function updateGrid(){
+  for(let i=0;i<grid.length;i++){
+    gridAge[i]--;
+    if(gridAge[i]<=0){ gridTarget[i]=rng(); gridAge[i]=300+Math.floor(rng()*600);}
+    grid[i]+=(gridTarget[i]-grid[i])*0.0008;
+  }
+}
+function sampleGrid(sx,sy){
+  const col=Math.max(0,Math.min(W-1,sx))/CELL_W;
+  const row=Math.max(0,Math.min(H-1,sy))/CELL_H;
+  const c0=Math.max(0,Math.min(COLS-2,Math.floor(col)));
+  const r0=Math.max(0,Math.min(ROWS-2,Math.floor(row)));
+  const cf=col-c0, rf=row-r0;
+  const scf=cf*cf*(3-2*cf), srf=rf*rf*(3-2*rf);
+  return grid[r0*COLS+c0]*(1-scf)*(1-srf)
+       + grid[r0*COLS+c0+1]*scf*(1-srf)
+       + grid[(r0+1)*COLS+c0]*(1-scf)*srf
+       + grid[(r0+1)*COLS+c0+1]*scf*srf;
+}
+
+const CODE_SIZE = 14;
+let codeCols=[];
+function initCodeRain(){
+  codeCols=[];
+  const n=Math.floor(W/CODE_SIZE);
+  for(let i=0;i<n;i++) codeCols.push({x:i*CODE_SIZE, y:Math.random()*-H, speed:0.1+rng()*1.0});
+}
+initCodeRain();
+
+function drawCodeBackground(){
+  ctx.save();
+  ctx.font= \${CODE_SIZE}px monospace;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  for(const col of codeCols){
+    col.y+=col.speed;
+    if(col.y>H) col.y=-CODE_SIZE;
+    for(let i=0;i<2;i++){
+      const y=col.y+i*CODE_SIZE;
+      const line=codeLines[Math.floor(rng()*codeLines.length)];
+      // random brightness influenced by number
+      const val=rng();
+      ctx.fillStyle=rgba(\\\${50+val*200},\\\${50+val*200},\\\${50+val*200},0.5)';
+;
+      ctx.fillText(line,col.x,y);
+    }
+  }
+  ctx.restore();
+}
+
+// Palette
+function hsl2rgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s /= 100;
+  l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255);
+  return [f(0), f(8), f(4)];
+}
+
+function lerpC(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+
+function makePalette(hue, sat) {
+  const comp = (hue + 35 + 360) % 360;
+  return [
+    [255, 255, 255],
+    hsl2rgb(comp, sat * 0.7, 75),
+    hsl2rgb(hue, sat, 50),
+    hsl2rgb(hue, sat * 0.35, 14),
+  ];
+}
+let currentHue=rng()*360, targetHue=currentHue;
+let currentSat=40+rng()*30, targetSat=currentSat;
+let currentPal=makePalette(currentHue,currentSat);
+let targetPal=makePalette(currentHue,currentSat);
+let palT=1;
+
+function getColor(t){
+  t=Math.max(0,Math.min(0.9999,t));
+  const f=t*(currentPal.length-1),i=Math.floor(f),fr=f-i;
+  const c=lerpC(currentPal[i],currentPal[i+1],fr);
+  return [Math.round(c[0]),Math.round(c[1]),Math.round(c[2])];
+}
+
+// Ambient pad audio influenced by numbers
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+let audioStarted = false;
+
+document.body.addEventListener('click', () => {
+    if (!audioStarted) {
+        audioCtx.resume().then(() => {
+            console.log('Audio started');
+        });
+        audioStarted = true;
+    }
+});
+
+// Create multiple slow-moving oscillators for a dreamy pad
+const padOscs = [];
+const padNotes = [110, 146.83, 174.61, 196, 220]; // low C-E-G-A-C
+for (let f of padNotes){
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = f;
+  
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0; // start silent
+  
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 400 + Math.random()*200; // soft filter
+  
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  
+  padOscs.push({osc, gain, filter, baseFreq: f});
+}
+
+// smooth envelope function
+function envelope(gainNode, target, time=0.5){
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setTargetAtTime(target, audioCtx.currentTime, time);
+}
+
+function modulatePad(val){
+    // val = 0..1 from the number rain
+    padOscs.forEach(o => {
+        // volume modulation
+        const targetGain = 0.01 + val * 0.08; // louder for higher numbers
+        o.gain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+
+        // filter sweep modulation
+        const targetFreq = 400 + val * 2000; // higher numbers = brighter
+        o.filter.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.2);
+
+        // subtle detune for movement
+        const detune = Math.sin(performance.now()*0.0001 + o.baseFreq) * 10;
+        o.osc.frequency.setTargetAtTime(o.baseFreq + detune, audioCtx.currentTime, 0.1);
+    });
+}
+
+// Replace old modulateMelody with pad version
+function modulateMelody(val){
+  modulatePad(val);
+}
+
+function evolveColors() {
+    // slowly rotate hue
+    currentHue += 0.05; // adjust speed as you like
+    currentPal[0] = hsl2rgb(currentHue, currentSat, 50);
+    currentPal[1] = hsl2rgb((currentHue + 35) % 360, currentSat, 60);
+    currentPal[2] = hsl2rgb((currentHue + 70) % 360, currentSat, 40);
+}
+
+// Number generator for color & audio modulation
+let numberTimer = 0;
+const numberInterval = 7; // how often to generate a new number
+
+function updateNumbers() {
+    numberTimer++;
+    if (numberTimer >= numberInterval) {
+        numberTimer = 0;
+        const val = rng(); // generate new random number 0..1
+
+        // update colors
+        targetHue = val * 360;
+        targetSat = 30 + val * 50;
+        targetPal = makePalette(targetHue, targetSat);
+        palT = 0;
+
+        // update audio pad
+        modulatePad(val);
+    }
+}
+// Sphere particle flow field
+const N=8000;
+const px=new Float32Array(N), py=new Float32Array(N);
+const vx=new Float32Array(N), vy=new Float32Array(N);
+const ATTRACTION=0.013, DAMPING=0.93;
+let angle=0;
+function homePos(i){ return [Math.sin(i+angle)*Math.sin(i*i)*radius_,Math.cos(i*i)*radius_]; }
+for(let i=0;i<N;i++){ const [hx,hy]=homePos(i); px[i]=hx; py[i]=hy; }
+
+// Main loop
+function frame(){
+  evolveColors();
+  updateGrid();
+  if(palT<1){ palT=Math.min(1,palT+0.0025); for(let s=0;s<currentPal.length;s++) currentPal[s]=lerpC(currentPal[s],targetPal[s],0.0025);}
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+  updateNumbers()
+  drawCodeBackground();
+  ctx.save();
+  ctx.translate(CX,CY);
+  for(let i=0;i<N;i++){
+    const [hx,hy]=homePos(i);
+    vx[i]+=(hx-px[i])*ATTRACTION; vy[i]+=(hy-py[i])*ATTRACTION;
+    vx[i]*=DAMPING; vy[i]*=DAMPING;
+    px[i]+=vx[i]; py[i]+=vy[i];
+    const gv=sampleGrid(Math.max(0,Math.min(W-1,px[i]+CX)),Math.max(0,Math.min(H-1,py[i]+CY)));
+    const t=Math.max(0,Math.min(1,gv*0.55+(i/N)*0.28));
+    const alpha=Math.max(0.07,Math.min(1,0.42+gv*0.52));
+    const [r,g,b]=getColor(t);
+    ctx.fillStyle= 'rgba(\${r},\${g},\${b},\${alpha.toFixed(3)})';
+    ctx.beginPath(); ctx.arc(px[i],py[i],0.8+gv*0.65,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+  angle+=0.01;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+`.trim();
+
+const codeLines = fullCode.split("\n").map(l=>l.trim()).filter(l=>l);
+const CODE_SIZE = 14;
+let codeCols=[];
+function initCodeRain(){
+  codeCols=[];
+  const n=Math.floor(W/CODE_SIZE);
+  for(let i=0;i<n;i++) codeCols.push({x:i*CODE_SIZE, y:Math.random()*-H, speed:0.1+rng()*1.0});
+}
+initCodeRain();
+
+function drawCodeBackground(){
+  ctx.save();
+  ctx.font=`${CODE_SIZE}px monospace`;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  for(const col of codeCols){
+    col.y+=col.speed;
+    if(col.y>H) col.y=-CODE_SIZE;
+    for(let i=0;i<2;i++){
+      const y=col.y+i*CODE_SIZE;
+      const line=codeLines[Math.floor(rng()*codeLines.length)];
+      // random brightness influenced by number
+      const val=rng();
+      ctx.fillStyle=`rgba(${50+val*200},${50+val*200},${50+val*200},0.5)`;
+      ctx.fillText(line,col.x,y);
+    }
+  }
+  ctx.restore();
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+let flash = null;
+let flashCooldown = 0;
+
+function maybeTriggerFlash() {
+  if (flashCooldown > 0) {
+    flashCooldown--;
+    return;
+  }
+
+  if (!flash && rng() < 0.8) { // small chance per frame
+    flash = {
+      text: codeLines.slice(
+        Math.floor(rng()*codeLines.length),
+        Math.floor(rng()*codeLines.length) + 5
+      ).join("\n"),
+      size: Math.max(W,H) * (0.08 + rng()*0.25),
+      x: rng() * W,
+      y: rng() * H,
+      alpha: 1,
+      decay: 0.1 + rng()*0.03
+    };
+    flashCooldown = 25 + Math.floor(rng()*5); // ~5–10 seconds cooldown
+  }
+}
+
+function drawFlash(){
+  if (!flash) return;
+
+  ctx.save();
+
+  ctx.font = `${flash.size}px monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // glow effect
+  ctx.shadowColor = 'white';
+  ctx.shadowBlur = 20;
+
+  ctx.fillStyle = `rgba(255,255,255,${flash.alpha})`;
+
+  const lines = flash.text.split("\n");
+  lines.forEach((line, i) => {
+  ctx.fillText(line, flash.x, flash.y + i * flash.size * 1.1);
+  });
+
+  ctx.restore();
+
+  // fade out
+  flash.alpha -= flash.decay;
+
+  if (flash.alpha <= 0){
+    flash = null;
+  }
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// Palette
+function hsl2rgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s /= 100;
+  l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255);
+  return [f(0), f(8), f(4)];
+}
+
+function lerpC(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+
+function makePalette(hue, sat) {
+  const comp = (hue + 35 + 360) % 360;
+  return [
+    [255, 255, 255],
+    hsl2rgb(comp, sat * 0.7, 75),
+    hsl2rgb(hue, sat, 50),
+    hsl2rgb(hue, sat * 0.35, 14),
+  ];
+}
+let currentHue=rng()*360, targetHue=currentHue;
+let currentSat=40+rng()*30, targetSat=currentSat;
+let currentPal=makePalette(currentHue,currentSat);
+let targetPal=makePalette(currentHue,currentSat);
+let palT=1;
+
+function getColor(t){
+  t=Math.max(0,Math.min(0.9999,t));
+  const f=t*(currentPal.length-1),i=Math.floor(f),fr=f-i;
+  const c=lerpC(currentPal[i],currentPal[i+1],fr);
+  return [Math.round(c[0]),Math.round(c[1]),Math.round(c[2])];
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+ 
+// Ambient pad audio influenced by numbers
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+let audioStarted = false;
+
+document.body.addEventListener('click', () => {
+    if (!audioStarted) {
+        audioCtx.resume().then(() => {
+            console.log('Audio started');
+        });
+        audioStarted = true;
+    }
+});
+
+// Create multiple slow-moving oscillators for a dreamy pad
+const padOscs = [];
+const padNotes = [110, 146.83, 174.61, 196, 220]; // low C-E-G-A-C
+for (let f of padNotes){
+  const osc = audioCtx.createOscillator();
+  osc.type = 'sine';
+  osc.frequency.value = f;
+  
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0; // start silent
+  
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 400 + Math.random()*200; // soft filter
+  
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.start();
+  
+  padOscs.push({osc, gain, filter, baseFreq: f});
+}
+
+// smooth envelope function
+function envelope(gainNode, target, time=0.5){
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setTargetAtTime(target, audioCtx.currentTime, time);
+}
+
+function modulatePad(val){
+    // val = 0..1 from the number rain
+    padOscs.forEach(o => {
+        // volume modulation
+        const targetGain = 0.01 + val * 0.08; // louder for higher numbers
+        o.gain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.1);
+
+        // filter sweep modulation
+        const targetFreq = 400 + val * 2000; // higher numbers = brighter
+        o.filter.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.2);
+
+        // subtle detune for movement
+        const detune = Math.sin(performance.now()*0.0001 + o.baseFreq) * 10;
+        o.osc.frequency.setTargetAtTime(o.baseFreq + detune, audioCtx.currentTime, 0.1);
+    });
+}
+
+// Replace old modulateMelody with pad version
+function modulateMelody(val){
+  modulatePad(val);
+}
+
+function evolveColors() {
+    // slowly rotate hue
+    currentHue += 0.05; // adjust speed as you like
+    currentPal[0] = hsl2rgb(currentHue, currentSat, 50);
+    currentPal[1] = hsl2rgb((currentHue + 35) % 360, currentSat, 60);
+    currentPal[2] = hsl2rgb((currentHue + 70) % 360, currentSat, 40);
+}
+
+// Number generator for color & audio modulation
+let numberTimer = 0;
+const numberInterval = 7; // how often to generate a new number
+
+function updateNumbers() {
+    numberTimer++;
+    if (numberTimer >= numberInterval) {
+        numberTimer = 0;
+        const val = rng(); // generate new random number 0..1
+
+        // update colors
+        targetHue = val * 360;
+        targetSat = 30 + val * 50;
+        targetPal = makePalette(targetHue, targetSat);
+        palT = 0;
+
+        // update audio pad
+        modulatePad(val);
+    }
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// --- Sphere pulse: pure slow breath only ---
+let breathPhase = 0;
+const BREATH_AMP   = 0.07; // ±2.2% — very subtle
+const BREATH_SPEED = 0.0010472; // period ~22500 frames ≈ ~6 min full inhale+exhale
+ 
+function updatePulse(){
+  breathPhase += BREATH_SPEED;
+  return (1.0 + Math.sin(breathPhase * Math.PI * 2) * BREATH_AMP) * radius_;
+}
+
+
+
+ // ------------------------------------------------------------------------ 
+
+
+
+// Slow camera drift ---
+// Two independent very-low-frequency sinusoids per axis
+//const CAM_AMP_X = 0.1; // fraction of W
+//const CAM_AMP_Y = 0.08; // fraction of H
+const CAM_AMP_X = 0; // fraction of W
+const CAM_AMP_Y = 0; // fraction of H
+const CAM_FREQ_X1 = 0.0031, CAM_FREQ_X2 = 0.0019;
+const CAM_FREQ_Y1 = 0.0027, CAM_FREQ_Y2 = 0.0023;
+let camT = 0;
+ 
+function getCameraOffset(){
+  camT++;
+  const ox = (Math.sin(camT * CAM_FREQ_X1 * Math.PI * 2) * 0.6
+            + Math.sin(camT * CAM_FREQ_X2 * Math.PI * 2) * 0.4) * W * CAM_AMP_X;
+  const oy = (Math.sin(camT * CAM_FREQ_Y1 * Math.PI * 2) * 0.6
+            + Math.sin(camT * CAM_FREQ_Y2 * Math.PI * 2) * 0.4) * H * CAM_AMP_Y;
+  return [ox, oy];
+}
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// Sphere particle flow field
+const N=25000;
+const px=new Float32Array(N), py=new Float32Array(N);
+const vx=new Float32Array(N), vy=new Float32Array(N);
+const ATTRACTION=0.013, DAMPING=0.93;
+let angle=0;
+function homePos(i, r){ return [Math.sin(i+angle)*Math.sin(i*i)*r, Math.cos(i*i)*r]; }
+for(let i=0;i<N;i++){ const [hx,hy]=homePos(i, radius_); px[i]=hx; py[i]=hy; }
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+
+
+
+// --- Flow flash state ---
+let flowFlash = 0;          // 0 = calm, 1 = full flash
+let flowFlashTarget = 0;    // target flow strength (0 or 1)
+let flowFlashDuration = 0;  // countdown
+const MAX_FLASH_DURATION = 30;  // max duration in frames
+const FLOW_STRENGTH_BASE = 0.0;
+const FLOW_STRENGTH_FLASH = 0.8; // max burst strength
+const FLOW_FLASH_RAMP = 0.02;    // how fast flowFlash approaches target
+
+function maybeTriggerFlowFlash() {
+    if(flowFlashDuration <= 0 && rng() < 0.002){ // small chance per frame
+        flowFlashTarget = 1;                    // start ramping up
+        flowFlashDuration = 20 + Math.floor(rng() * MAX_FLASH_DURATION);
+    }
+}
+
+function updateFlowFlash() {
+    // smooth ramp toward target
+    flowFlash += (flowFlashTarget - flowFlash) * FLOW_FLASH_RAMP;
+
+    if(flowFlashDuration > 0){
+        flowFlashDuration--;
+        if(flowFlashDuration <= 0) flowFlashTarget = 0; // start ramping down
+    }
+}
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+// Main loop
+function frame(){
+    const effectiveRadius = updatePulse();          // sphere breathing
+    const [ox, oy] = getCameraOffset();            // camera drift
+    evolveColors();
+    updateGrid();
+    
+    if(palT < 1){
+        palT = Math.min(1, palT + 0.0025);
+        for(let s=0; s<currentPal.length; s++)
+            currentPal[s] = lerpC(currentPal[s], targetPal[s], 0.0025);
+    }
+
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,W,H);
+
+    updateNumbers();
+    maybeTriggerFlash();
+    drawCodeBackground();
+    drawFlash();
+
+// Compute current flow strength
+maybeTriggerFlowFlash();
+updateFlowFlash();
+const currentFlowStrength = FLOW_STRENGTH_BASE + FLOW_STRENGTH_FLASH * flowFlash;
+
+    ctx.save();
+    ctx.translate(CX + ox, CY + oy);
+
+    for(let i=0; i<N; i++){
+        // Sphere home position
+        const [hx, hy] = homePos(i, effectiveRadius);
+
+        // Base velocity towards home (sphere)
+        vx[i] += (hx - px[i]) * ATTRACTION;
+        vy[i] += (hy - py[i]) * ATTRACTION;
+
+        // Occasionally add flow field nudge only during flash
+        if(currentFlowStrength > 0){
+            const angle = getFlowAngle(px[i]+CX, py[i]+CY);
+            vx[i] += Math.cos(angle) * currentFlowStrength;
+            vy[i] += Math.sin(angle) * currentFlowStrength;
+        }
+
+        // Damping
+        vx[i] *= DAMPING;
+        vy[i] *= DAMPING;
+
+        // Update positions
+        px[i] += vx[i];
+        py[i] += vy[i];
+
+        // Clamp to sphere radius
+        const dist = Math.sqrt(px[i]*px[i] + py[i]*py[i]);
+        if(dist > effectiveRadius){
+            px[i] = (px[i]/dist) * effectiveRadius;
+            py[i] = (py[i]/dist) * effectiveRadius;
+        }
+
+        // Draw particle
+        const gv = sampleGrid(Math.max(0, Math.min(W-1, px[i]+CX)), Math.max(0, Math.min(H-1, py[i]+CY)));
+        const t = Math.max(0, Math.min(1, gv*0.55 + (i/N)*0.28));
+        const alpha = Math.max(0.07, Math.min(1, 0.42 + gv*0.52));
+        const [r,g,b] = getColor(t);
+
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(px[i], py[i], 0.8 + gv*0.65, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+    angle += 0.01;
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+
+
+// ------------------------------------------------------------------------ 
+
+
+
+
+
+</script>
+</body>
+</html>
