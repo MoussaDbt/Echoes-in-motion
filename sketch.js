@@ -229,7 +229,7 @@ let attraction =0.01;
 let damping = 0.9;
 let w = window.innerWidth;
 let h = window.innerHeight;
-let radius = 0.425*h;
+let radius = 0.4*h;
 
 const FLOW_STRENGTH_BASE = 0.0;
 const FLOW_STRENGTH_FLASH = 0.8; // max burst strength
@@ -274,7 +274,7 @@ let g ;
 let b ;
 
 function preload() {
-  song = loadSound('tunetank-vlog-beat-background-349853.mp3');
+  song = loadSound('beat1.mp3');
 }
 
 
@@ -319,7 +319,7 @@ function draw() {
 
   bassAmp = map(bass,0,255, 0,1)
   
-  radius = map(bassAmp, 0, 1, 0.425*height, 0.425*height*1.1);  // augmentation du rayon en fonction du rythme
+  radius = map(bassAmp, 0, 1, 0.4*height, 0.425*height*1.15);  // augmentation du rayon en fonction du rythme
 
   
   console.log(bassAmp)
