@@ -253,16 +253,16 @@ function drawCodeRain(){
   textSize(charSize);
   textFont('monospace');
   textAlign(LEFT, TOP);
-  for(let col of codeCols){
-    col.y += charSize*col.speed;
-    if(col.y > h) {
-      col.y = -charSize;  // on remet le bloc de code en haut
+  for(let col =0; col < codeCols.length; col++){
+    codeCols[col].y += charSize*codeCols[col].speed;
+    if(codeCols[col].y > h) {
+      codeCols[col].y = -charSize;  // on remet le bloc de code en haut
     }
     for(let i=0; i<2; i++){
-      const line = codeLines[Math.floor(random(0,1)*codeLines.length)];
-      y = col.y + i*charSize;
-      fill(255,255,255, random(50, 100)); // fade out en bas
-      text(line, col.x, y);
+      const line = codeLines[col+i];
+      y = codeCols[col].y + i*charSize;
+      fill(255,255,255, 55); // fade out en bas
+      text(line, codeCols[col].x, y);
     }
   }
 }
