@@ -239,6 +239,7 @@ let flowFlash = 0;
 let flowFlashTarget = 0;
 let flowFlashDuration = 0;
 
+let baseHue;
 
 function initCodeRain(){
   codeCols=[];
@@ -297,19 +298,17 @@ function setup() {
   
   
   fft =  new p5.FFT()
-  r=random(50,255);
-  g=random(50,255);
-  b=random(50,255);
-  shapeColor = color(r, g, b);
+  baseHue = random(0, 360);
+  colorMode(RGB, 255);
 }
   
 
 function draw() {
+  colorMode(RGB, 255);
   background(0);
 
   drawCodeRain()
   
-  fill(shapeColor);
   noStroke();
   translate(width / 2, height / 2); // centre du canvas
   
@@ -323,7 +322,21 @@ function draw() {
 
   
   console.log(bassAmp)
+
+  // use mids for color
+  let mid = fft.getEnergy("mid");  // ~500Hz–2kHz, reacts to melody/harmony
+  let midAmp = map(mid, 0, 255, 0, 1);
   
+  let hueShift = song.isPlaying() ? frameCount * 0.1 : 0;
+  let hue = (baseHue + hueShift + midAmp * 40) % 360;
+  let saturation = map(midAmp, 0, 1, 60, 100);
+  let bright = map(midAmp, 0, 1, 70, 100);
+
+  // convert HSB to RGB manually so colorMode doesn't interfere
+  colorMode(HSB, 360, 100, 100);
+  let c = color(hue, saturation, bright);
+  colorMode(RGB, 255); 
+  fill(c);
   
   for (let i = 0; i < particles.length; i++) {
     let p = particles[i];
