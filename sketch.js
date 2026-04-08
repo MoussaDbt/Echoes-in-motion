@@ -234,12 +234,14 @@ let radius = 0.4*h;
 const FLOW_STRENGTH_BASE = 0.0;
 const FLOW_STRENGTH_FLASH = 0.8; // max burst strength
 const FLOW_FLASH_RAMP = 0.02;
-let song;
 let flowFlash = 0; 
 let flowFlashTarget = 0;
 let flowFlashDuration = 0;
 
 let baseHue;
+
+let songs = [];
+let currentSong;
 
 function initCodeRain(){
   codeCols=[];
@@ -275,13 +277,17 @@ let g ;
 let b ;
 
 function preload() {
-  song = loadSound('beat1.mp3');
+  songs.push(loadSound('music/Interstellar Official Soundtrack _ Cornfield Chase – Hans Zimmer _ WaterTower - (320 Kbps).mp3'));
+  songs.push(loadSound('music/Radiohead - Everything In Its Right Place - (320 Kbps).mp3'));
+  // songs.push(loadSound('music/Bang.wav'));
+  songs.push(loadSound('music/Kpop edit by Heni Rakoto .mp3'));
+  songs.push(loadSound('music/tunetank-vlog-beat-background-349853.mp3'));
 }
 
 
 function setup() {
   createCanvas(w, h);
-
+  noCursor();
   initCodeRain();
 
   // Initialisation des particules une seule fois
@@ -316,9 +322,13 @@ function draw() {
   // on va se servir de l'amplitude de la bass, il est egalement possible de se servir d'autres types de frequences
   bass = fft.getEnergy(20,60);
 
-  bassAmp = map(bass,0,255, 0,1)
+  bassAmp = map(bass, 120, 200, 0, 1);
+  bassAmp = constrain(bassAmp, 0, 2);
+  bassAmp = pow(bassAmp, 2);
+  bassAmp += noise(frameCount * 0.05) * 0.05;
   
   radius = map(bassAmp, 0, 1, 0.4*height, 0.425*height*1.15);  // augmentation du rayon en fonction du rythme
+  radius = constrain(radius, 0.4*height, 0.425*height*1.15);
 
   
   console.log(bassAmp)
@@ -481,11 +491,13 @@ function SimplexNoise (xin, yin) {
 
 
 function mousePressed() {
-  if (song.isPlaying()) {
-    song.stop();
-  } else {
-    song.play();
+  if (currentSong && currentSong.isPlaying()) {
+    currentSong.stop();
+    return;
   }
+  let index = floor(random(songs.length));
+  currentSong = songs[index];
+  currentSong.play();
 }
 
 
