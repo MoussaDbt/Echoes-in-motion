@@ -1,2 +1,2 @@
 # Echoes-in-motion
-Il s'agit d'une oeuvre animee  sur l'algo de flow field 
+Echoes-in-motion est une œuvre composée d'un ensemble de particules formant une sphère, dont les mouvements suivent un champs vectoriel influence par la musique
